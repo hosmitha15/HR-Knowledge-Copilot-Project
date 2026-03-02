@@ -1,0 +1,134 @@
+27th jan 2026
+server vs client
+port numbers are associated with each protocol
+http - 80
+https - 463
+ssl - 22
+ftp - 21
+
+protocols - http(not secured) ,https(secured-certificate link ssl) - rendering the content
+ftp (not mostly used nowadays) ,ssh - store/access data from any server
+
+Domain
+google.com - Top level domain(TLD), www. - subdomain(to segregate internally)
+ex: app1.dev.darwinbox.com
+    app2.dev.darwinbox.com
+    
+multiple subpaths in it
+app1.qa.darwinbox.com/home
+app1.qa.darwinbox.com/about
+
+any number of parameters
+app1.qa.darwinbox.com/home/team/1
+app1.qa.darwinbox.com/about/team/2
+
+query and path parameter (can have n number of path parameters)
+app1.qa.darwinbox.com/home/team/:id/:name - :id path parameter
+app1.qa.darwinbox.com/about/team?id=1&name=john&projectId=1 - query parameter always starts with a ?, & is used in b/w to seperate
+
+local computer
+replace host name with ip address
+http://localhost/home -> localhost is host name
+http://127.0.0.1/home -> 127.0.0.1 i host name
+http://localhost:8080/home -> 8080 is the port
+
+localhost:3000/home - 3000 is the port backend
+localhost:4000/home - 4000 is port angular
+
+command - cat /etc/hosts, ping google.com
+
+google.com -> browser address bar(goes to DNS sever, translation to IP address of server from human readable text) -> DNS(Domain Name server) -> Server IP(Port) (142.250.70.110) -> Application
+
+2 types of IP addresses - IPv4(32-bit) and IPv6(128-bit)
+
+check for free DNS servers, elements and console sources (any website)
+
+Request methods
+GET - retrieve information
+POST - creates new information/ send some information
+PUT - update a record (replace entire obj)
+PATCH - update fields in a record (replace a piece of object)
+DELETE - Delete a record
+OPTIONS - Am I allowed to use this METHOD?
+
+
+HTTP response status codes - informational, successful, redirection, client error, server error, browser
+
+
+
+28th jan - HTML,CSS and JS
+different heading tags, style and script tags- precedence to inline styling, para tag
+input: 
+type=text,placeholder,value(pre-assigned);
+date, color , radio within a div tag - type, id and label
+form: action tag
+table: thead,tr,th(headers),td(values)
+link ref: href,rel,integrity,crossorigin
+container: butons-type,classs
+
+js script tags
+onclick, alert, console.log
+simple functions
+
+29th jan
+scss, less, sass
+style.css.map, style.scss
+
+30th jan
+npm packages and type scripts
+npm i -g bootstrap typescript
+
+2nd feb 
+Git commands - git -v, git -h, cd, ls, ls -l(list format), ls -la, chmod, touch
+git status, git add ., git commit -m "message", git log, git checkout main, source tree, fork, git stash, deployment.yml
+
+3rd feb
+index.js, index.scss, inex.ts
+
+6th feb
+JQuery - fast,small and feature rich js library
+
+
+
+
+Tika + Tesseract OCR → Extract all text including scanned PDFs.
+
+Python microservice with Camelot / Tabula → Parse tables from PDFs and output as structured text/JSON.
+
+Convert tables to embedding-friendly strings → Store in MongoDB.
+
+Use your existing RAG pipeline → Vector search + GPT for Q&A.
+
+This way you get OCR support + structured table extraction, completely free for testing.
+
+
+
+hr-frontend/
+├── index.html
+├── package.json
+├── vite.config.js          ← proxy to localhost:5000 built in
+└── src/
+    ├── main.jsx
+    ├── App.jsx             ← React Router, protected routes
+    ├── context/
+    │   └── AuthContext.jsx ← global auth state (token, role, login, logout)
+    ├── services/
+    │   └── api.js          ← ALL backend calls in one place
+    ├── styles/
+    │   └── global.css      ← CSS variables, base styles
+    ├── components/
+    │   ├── Icons.jsx        ← all SVG icons
+    │   ├── Topbar.jsx       ← shared header for HR + User
+    │   ├── AuthForm.jsx     ← reusable login/register form
+    │   ├── UploadZone.jsx   ← drag & drop upload
+    │   ├── DocumentCard.jsx ← each document in HR grid
+    │   ├── ChatMessage.jsx  ← individual chat bubble
+    │   ├── TypingIndicator.jsx
+    │   └── Toast.jsx
+    └── pages/
+        ├── LandingPage.jsx  ← role selection
+        ├── HRAuthPage.jsx   ← HR-specific login/register
+        ├── UserAuthPage.jsx ← Employee-specific login/register
+        ├── HRDashboard.jsx  ← upload + document manager
+        └── UserChat.jsx     ← full chat interface
+

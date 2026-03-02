@@ -1,0 +1,39 @@
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 20px;
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+  font-weight: 500;
+  z-index: 9999;
+  animation: slideUp 0.3s ease;
+  box-shadow: var(--shadow-lg);
+  max-width: 360px;
+}
+
+.success {
+  background: var(--success);
+  color: white;
+}
+
+.error {
+  background: var(--danger);
+  color: white;
+}
+
+.info {
+  background: var(--navy);
+  color: white;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}

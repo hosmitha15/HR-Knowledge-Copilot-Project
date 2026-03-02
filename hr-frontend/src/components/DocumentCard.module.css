@@ -1,0 +1,73 @@
+.card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: box-shadow 0.2s, transform 0.2s;
+    animation: fadeIn 0.25s ease;
+    position: relative;
+}
+
+.card:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+    border-color: rgba(1, 131, 255, 0.2);
+}
+
+.fileIcon {
+    width: 42px;
+    height: 42px;
+    background: rgba(1, 131, 255, 0.08);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+.info {
+    flex: 1;
+    min-width: 0;
+}
+
+.name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--navy);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+}
+
+.meta {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+}
+
+.deleteBtn {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    background: var(--danger-bg);
+    border: 1px solid var(--danger-border);
+    color: var(--danger);
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.deleteBtn:hover {
+    background: var(--danger);
+    color: white;
+    transform: scale(1.08);
+}

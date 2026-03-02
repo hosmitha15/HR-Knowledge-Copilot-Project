@@ -1,0 +1,105 @@
+.zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2.8rem 2rem;
+  text-align: center;
+  background: var(--white);
+  cursor: pointer;
+  transition: all 0.25s;
+  position: relative;
+  margin-bottom: 2rem;
+  user-select: none;
+}
+
+.zone:hover {
+  border-color: rgba(1, 131, 255, 0.3);
+  background: rgba(1, 131, 255, 0.02);
+}
+
+.zone.drag {
+  border-color: var(--primary);
+  background: rgba(1, 131, 255, 0.04);
+  transform: scale(1.01);
+}
+
+.zone.uploading {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.fileInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.icon {
+  width: 54px;
+  height: 54px;
+  background: rgba(1, 131, 255, 0.08);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+  color: var(--primary);
+  transition: background 0.2s;
+}
+
+.zone.drag .icon {
+  background: rgba(1, 131, 255, 0.15);
+}
+
+.title {
+  font-weight: 600;
+  color: var(--navy);
+  margin-bottom: 4px;
+  font-size: 0.95rem;
+}
+
+.sub {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.typeTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 1.2rem;
+}
+
+.tag {
+  background: var(--cream-dark);
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.73rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.progressBar {
+  background: var(--cream-dark);
+  border-radius: 100px;
+  height: 5px;
+  overflow: hidden;
+  margin-top: 1.4rem;
+  width: 100%;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 100px;
+  transition: width 0.4s ease;
+}
