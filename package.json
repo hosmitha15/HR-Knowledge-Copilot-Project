@@ -29,8 +29,10 @@
     "pdf-parse": "^1.1.4",
     "pdf-poppler": "^0.2.3",
     "pdf-text-extract": "^1.5.0",
+    "pdf2table": "^0.0.2",
     "pdfjs-dist": "^5.4.624",
     "sharp": "^0.34.5",
+    "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

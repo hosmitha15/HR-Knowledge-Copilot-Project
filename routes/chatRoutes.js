@@ -9,6 +9,49 @@ import {
 
 const router = express.Router();
 
+/**
+ * Render a single retrieved chunk as a context string for the LLM.
+ * Table chunks with tableMetadata get the structured format:
+ *
+ *   [TABLE DATA] Table: Leave Policy | Rows 1–5 of 20
+ *   Columns:
+ *   Leave Type | Days | Eligibility
+ *
+ *   Records:
+ *   Casual | 12 | All Employees
+ *
+ * Plain text/image chunks fall back to existing label + content.
+ */
+function renderChunkForContext(r) {
+  const typeLabel =
+    r.type === "table" ? "TABLE DATA" :
+      r.type === "image" ? "IMAGE DESCRIPTION" : "TEXT";
+
+  if (r.type === "table" && r.tableMetadata && r.tableMetadata.headers && r.tableMetadata.headers.length > 0) {
+    const { tableName, headers, totalRows, chunkRowStart, chunkRowEnd } = r.tableMetadata;
+    const rowRange = (chunkRowStart && chunkRowEnd)
+      ? ` | Rows ${chunkRowStart}–${chunkRowEnd} of ${totalRows || "?"}`
+      : "";
+    // Use stored structured content if it already has the format, else rebuild
+    const hasStructured = r.content && r.content.startsWith("Table:");
+    const body = hasStructured
+      ? r.content
+      : [
+        `Table: ${tableName || "Unknown"}`,
+        "",
+        "Columns:",
+        headers.join(" | "),
+        "",
+        "Records:",
+        // strip a header row from content if it was stored pipe-style
+        ...(r.content || "").split("\n").filter(l => l.trim().length > 0),
+      ].join("\n");
+    return `[${typeLabel}]${rowRange}\n${body}`;
+  }
+
+  return `[${typeLabel}] Section: ${r.section} | File: ${r.filename}\n${r.content}`;
+}
+
 function contentOverlap(a, b) {
   const wordsA = new Set(a.toLowerCase().split(/\s+/));
   const wordsB = new Set(b.toLowerCase().split(/\s+/));
@@ -73,7 +116,7 @@ router.post("/chat", async (req, res) => {
 
     const allDocs = await Document.find(
       {},
-      { content: 1, filename: 1, section: 1, embedding: 1, type: 1 }
+      { content: 1, filename: 1, section: 1, embedding: 1, type: 1, tableMetadata: 1 }
     );
 
     if (!allDocs.length) return res.json({ answer: "No documents uploaded yet." });
@@ -89,8 +132,12 @@ router.post("/chat", async (req, res) => {
 
       const contentLower = (doc.content || "").toLowerCase();
       const keywordHits = keywords.filter((kw) => contentLower.includes(kw)).length;
+      // Also boost if keyword appears in tableMetadata headers
+      const headerHits = docType === "table" && doc.tableMetadata?.headers
+        ? keywords.filter((kw) => doc.tableMetadata.headers.some((h) => h.toLowerCase().includes(kw))).length
+        : 0;
       const keywordBoostPerHit = docType === "table" ? 0.07 : 0.04;
-      const keywordBoost = Math.min(keywordHits * keywordBoostPerHit, 0.20);
+      const keywordBoost = Math.min((keywordHits + headerHits) * keywordBoostPerHit, 0.25);
 
       return {
         content: doc.content,
@@ -99,6 +146,7 @@ router.post("/chat", async (req, res) => {
         type: docType,
         score: baseSimilarity + sectionBoost + keywordBoost,
         embedding: doc.embedding,
+        tableMetadata: doc.tableMetadata || null,
       };
     });
 
@@ -129,7 +177,7 @@ router.post("/chat", async (req, res) => {
     }
 
     const overallTopScore = topResults[0]?.score || 0;
-    const minFileScore = overallTopScore * 0.60; 
+    const minFileScore = overallTopScore * 0.60;
     const relevantFiles = {};
     for (const [fname, chunks] of Object.entries(byFile)) {
       const bestScore = Math.max(...chunks.map(c => c.score));
@@ -147,24 +195,14 @@ router.post("/chat", async (req, res) => {
         .map((fname, idx) => {
           const chunks = relevantFiles[fname];
           const chunkText = chunks
-            .map((r) => {
-              const typeLabel =
-                r.type === "table" ? "TABLE DATA" :
-                  r.type === "image" ? "IMAGE DESCRIPTION" : "TEXT";
-              return `  [${typeLabel}] Section: ${r.section}\n  ${r.content}`;
-            })
+            .map((r) => `  ${renderChunkForContext(r)}`)
             .join("\n\n");
           return `=== DOCUMENT ${idx + 1}: ${fname} ===\n${chunkText}`;
         })
         .join("\n\n");
     } else {
       context = topResults
-        .map((r) => {
-          const typeLabel =
-            r.type === "table" ? "TABLE DATA" :
-              r.type === "image" ? "IMAGE DESCRIPTION" : "TEXT";
-          return `[${typeLabel}] Section: ${r.section} | File: ${r.filename}\n${r.content}`;
-        })
+        .map((r) => renderChunkForContext(r))
         .join("\n\n---\n\n");
     }
 

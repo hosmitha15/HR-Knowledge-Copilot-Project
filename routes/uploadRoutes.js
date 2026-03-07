@@ -50,7 +50,7 @@ async function storeChunksWithSections(blocks, filename) {
   for (const block of blocks) {
     const sections = splitByHeadings(block);
     for (const section of sections) {
-      const text = section.content; 
+      const text = section.content;
       if (!text || text.trim().length < 20) continue;
       for (let i = 0; i < text.length; i += chunkSize - overlap) {
         const chunk = text.slice(i, i + chunkSize);
@@ -62,72 +62,148 @@ async function storeChunksWithSections(blocks, filename) {
   }
 }
 
-function enrichRowWithHeaders(headerCells, rowStr) {
-  const cells = rowStr.split("|").map((c) => c.trim());
-  return cells
-    .map((cell, i) => {
-      const header = headerCells[i] || `Col${i + 1}`;
-      return `${header}: ${cell}`;
-    })
-    .join(" | ");
+// ─────────────────────────────────────────────────────────────────────────────
+// Hybrid Structured Chunking for tables
+// Industry-level approach:
+//   • Headers stored ONCE per chunk (not repeated on every row)
+//   • Embedding text = compact: headers line + raw values only (no labels)
+//   • Chunk size = ROWS_PER_CHUNK data rows (default 5)
+//   • tableMetadata stored for LLM context reconstruction
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Infer a human-readable table name from the upload filename.
+ * e.g. "1709123456789-leave_policy.csv" → "Leave Policy"
+ */
+function inferTableName(filename, sheetName) {
+  if (sheetName && sheetName.toLowerCase() !== "sheet1") {
+    return sheetName.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+  }
+  // Strip timestamp prefix (digits + hyphen) and extension
+  const base = filename
+    .replace(/^\d+-/, "")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+  return base || "Table";
 }
 
-async function storeOtherChunks(blocks, filename, type) {
-  const sectionName = type === "table" ? "TABLE" : "IMAGE";
+/**
+ * Build compact embedding text for a table chunk:
+ *   Line 1: all header names joined by space
+ *   Line 2+: raw cell values for each row (no repeated header labels)
+ * This gives the embedding model maximum semantic signal with minimum noise.
+ */
+function buildEmbeddingText(headers, dataRows) {
+  const headerLine = headers.join(" ");
+  const rowLines = dataRows.map((row) =>
+    row.split("|").map((c) => c.trim()).join(" ")
+  );
+  return [headerLine, ...rowLines].join("\n");
+}
+
+/**
+ * Build the structured content string stored in MongoDB (and shown to LLM):
+ *   Table: <name>
+ *
+ *   Columns:
+ *   Col1 | Col2 | Col3
+ *
+ *   Records:
+ *   Val1 | Val2 | Val3
+ */
+function buildStructuredContent(tableName, headers, dataRows) {
+  return [
+    `Table: ${tableName}`,
+    "",
+    "Columns:",
+    headers.join(" | "),
+    "",
+    "Records:",
+    ...dataRows,
+  ].join("\n");
+}
+
+/**
+ * Stores table blocks using hybrid structured chunking.
+ * Replaces the old brute-force storeOtherChunks table branch.
+ *
+ * @param {string[]} blocks  - Array of pipe-delimited table strings (first row = header)
+ * @param {string}   filename - Original upload filename
+ * @param {string}   [sheetName] - Optional sheet name for XLSX (used in table name inference)
+ */
+async function storeTableChunks(blocks, filename, sheetName = "") {
+  const ROWS_PER_CHUNK = 5; // sweet spot: 3–8 rows per chunk
+  const sectionName = "TABLE";
 
   for (const block of blocks) {
     if (!block || block.trim().length < 10) continue;
 
-    if (type === "table") {
-      const rows = block.split("\n").filter((r) => r.trim().length > 0);
-      if (rows.length === 0) continue;
+    const rows = block.split("\n").filter((r) => r.trim().length > 0);
+    if (rows.length < 2) continue; // need at least header + 1 data row
 
-      const headerRow = rows[0]; 
-      const headerCells = headerRow.split("|").map((c) => c.trim());
-      const dataRows = rows.slice(1);
-      const MAX_ROWS_PER_CHUNK = 20;
+    const headerRow = rows[0];
+    const headers = headerRow.split("|").map((c) => c.trim()).filter(Boolean);
+    if (headers.length === 0) continue;
 
-      if (rows.length <= MAX_ROWS_PER_CHUNK + 1) {
-        const enrichedForEmbedding = [
-          headerRow,
-          ...dataRows.map((r) => enrichRowWithHeaders(headerCells, r)),
-        ].join("\n");
-        const embedding = await generateEmbedding(enrichedForEmbedding);
-        if (!embedding || embedding.length === 0) continue;
-        await DocumentChunk.create({ filename, type, content: block, embedding, section: sectionName });
-      } else {
-        for (let i = 0; i < dataRows.length; i += MAX_ROWS_PER_CHUNK) {
-          const batchDataRows = dataRows.slice(i, i + MAX_ROWS_PER_CHUNK);
-          const chunkContent = [headerRow, ...batchDataRows].join("\n");
-          const enrichedForEmbedding = [
-            headerRow,
-            ...batchDataRows.map((r) => enrichRowWithHeaders(headerCells, r)),
-          ].join("\n");
-          const embedding = await generateEmbedding(enrichedForEmbedding);
-          if (!embedding || embedding.length === 0) continue;
-          await DocumentChunk.create({ filename, type, content: chunkContent, embedding, section: sectionName });
-        }
-      }
+    const dataRows = rows.slice(1).filter((r) => r.trim().length > 0);
+    if (dataRows.length === 0) continue;
 
-      if (dataRows.length > 0 && dataRows.length <= 100) {
-        for (const row of dataRows) {
-          const enriched = enrichRowWithHeaders(headerCells, row);
-          const rowContent = `${headerRow}\n${row}`;
-          const embedding = await generateEmbedding(enriched);
-          if (!embedding || embedding.length === 0) continue;
-          await DocumentChunk.create({ filename, type, content: rowContent, embedding, section: sectionName });
-        }
-        console.log(`  📋 Created ${dataRows.length} per-row table chunks for "${filename}"`);
-      }
-    } else {
-      const chunkSize = 1500;
-      const overlap = 200;
-      for (let i = 0; i < block.length; i += chunkSize - overlap) {
-        const chunk = block.slice(i, i + chunkSize);
-        const embedding = await generateEmbedding(chunk);
-        if (!embedding || embedding.length === 0) continue;
-        await DocumentChunk.create({ filename, type, content: chunk, embedding, section: sectionName });
-      }
+    const tableName = inferTableName(filename, sheetName);
+    const totalRows = dataRows.length;
+    let chunksCreated = 0;
+
+    // ── Structured chunks (3–8 rows each) ─────────────────────────────────
+    for (let i = 0; i < dataRows.length; i += ROWS_PER_CHUNK) {
+      const batchRows = dataRows.slice(i, i + ROWS_PER_CHUNK);
+      const chunkRowStart = i + 1;          // 1-based
+      const chunkRowEnd = i + batchRows.length;
+
+      // Human-readable structured content for storage + LLM context
+      const content = buildStructuredContent(tableName, headers, batchRows);
+
+      // Compact embedding text: headers once + values only
+      const embeddingText = buildEmbeddingText(headers, batchRows);
+
+      const embedding = await generateEmbedding(embeddingText);
+      if (!embedding || embedding.length === 0) continue;
+
+      await DocumentChunk.create({
+        filename,
+        type: "table",
+        content,
+        embedding,
+        section: sectionName,
+        tableMetadata: {
+          tableName,
+          headers,
+          totalRows,
+          chunkRowStart,
+          chunkRowEnd,
+        },
+      });
+      chunksCreated++;
+    }
+
+    console.log(
+      `  📊 Table "${tableName}": ${totalRows} rows → ${chunksCreated} structured chunks (${ROWS_PER_CHUNK} rows/chunk) for "${filename}"`
+    );
+  }
+}
+
+async function storeOtherChunks(blocks, filename, type) {
+  // For image chunks only — table path now uses storeTableChunks
+  const sectionName = "IMAGE";
+  const chunkSize = 1500;
+  const overlap = 200;
+  for (const block of blocks) {
+    if (!block || block.trim().length < 10) continue;
+    for (let i = 0; i < block.length; i += chunkSize - overlap) {
+      const chunk = block.slice(i, i + chunkSize);
+      const embedding = await generateEmbedding(chunk);
+      if (!embedding || embedding.length === 0) continue;
+      await DocumentChunk.create({ filename, type, content: chunk, embedding, section: sectionName });
     }
   }
 }
@@ -200,15 +276,21 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     } else if (mimetype.includes("spreadsheetml.sheet")) {
 
       const workbook = xlsx.read(fileBuffer, { type: "buffer" });
-      workbook.SheetNames.forEach((name) => {
-        const sheet = workbook.Sheets[name];
+      // Process each sheet directly with storeTableChunks to preserve sheet names
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
         const rows = xlsx.utils.sheet_to_json(sheet, { header: 1 });
         const tableText = rows
           .filter((r) => r.some((c) => c !== null && c !== undefined && c !== ""))
           .map((row) => row.join(" | "))
           .join("\n");
-        if (tableText.trim().length > 10) extractedTables.push(tableText);
-      });
+        // Store each sheet immediately with its own name for accurate table naming
+        if (tableText.trim().length > 10) {
+          await storeTableChunks([tableText], filename, sheetName);
+        }
+      }
+      // Mark as handled so we skip the generic table store at the bottom
+      extractedTables = []; // already stored above
 
     } else if (mimetype === "application/pdf") {
 
@@ -282,10 +364,10 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
     console.log(` Extraction complete → text:${extractedTextBlocks.length} tables:${extractedTables.length} images:${extractedImages.length}`);
     await storeChunksWithSections(extractedTextBlocks, filename);
-    await storeOtherChunks(extractedTables, filename, "table");
+    await storeTableChunks(extractedTables, filename);   // ← structured chunking
     await storeOtherChunks(extractedImages, filename, "image");
     await Document.create({ filename, filepath: path.resolve(filepath), uploadedAt: new Date() });
-    clearCache(); 
+    clearCache();
     res.json({
       message: "File processed successfully",
       textBlocks: extractedTextBlocks.length,
@@ -335,7 +417,7 @@ router.delete("/documents/:id", async (req, res) => {
     if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
     await Document.deleteOne({ _id: req.params.id });
     await DocumentChunk.deleteMany({ filename: doc.filename });
-    clearCache(); 
+    clearCache();
     res.json({ message: "Document deleted successfully" });
   } catch (error) { console.error(error); res.status(500).json({ error: "Delete failed" }); }
 });

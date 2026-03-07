@@ -1,344 +1,110 @@
+/* ── Minimal Landing Page — blue & white only ── */
+
 .page {
   min-height: 100vh;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.container {
+  display: flex;
   flex-direction: column;
   align-items: center;
-  background: var(--navy);
-  position: relative;
-  overflow: hidden;
-}
-
-/* ── Animated glow orbs ── */
-.glowOrb1 {
-  position: absolute;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(1, 131, 255, 0.25) 0%, transparent 70%);
-  top: -200px;
-  left: -100px;
-  pointer-events: none;
-  animation: glowPulse 4s ease-in-out infinite;
-}
-
-.glowOrb2 {
-  position: absolute;
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(138, 43, 226, 0.15) 0%, transparent 70%);
-  top: -100px;
-  right: -150px;
-  pointer-events: none;
-  animation: glowPulse 5s ease-in-out infinite 1s;
-}
-
-.glowOrb3 {
-  position: absolute;
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(1, 131, 255, 0.12) 0%, transparent 70%);
-  bottom: -150px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: none;
-  animation: glowPulse 6s ease-in-out infinite 2s;
-}
-
-.grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(1, 131, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(1, 131, 255, 0.04) 1px, transparent 1px);
-  background-size: 56px 56px;
-  pointer-events: none;
-}
-
-/* ── Navigation ── */
-.nav {
-  position: relative;
-  z-index: 10;
+  gap: 20px;
   width: 100%;
-  max-width: 1200px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.2rem 2rem;
+  max-width: 400px;
+  padding: 40px 24px;
 }
 
+/* ── Logo ── */
 .logo {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: var(--white);
-  letter-spacing: -0.02em;
+  margin-bottom: 8px;
 }
 
-.navRight {
+.logoIcon {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.navBtn {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.8);
-  padding: 8px 20px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.navBtn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: var(--white);
-}
-
-.navBtnPrimary {
-  background: var(--primary);
-  border: none;
-  color: var(--white);
-  padding: 8px 22px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.navBtnPrimary:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(1, 131, 255, 0.4);
-}
-
-/* ── Content ── */
-.content {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-  padding: 3rem 2rem 4rem;
-  max-width: 780px;
-  width: 100%;
-  animation: fadeIn 0.6s ease;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--primary-soft);
-  border: 1px solid var(--primary-border);
-  color: var(--primary);
-  padding: 6px 18px;
-  border-radius: 100px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 2rem;
-}
-
-.badgeDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--primary);
-  animation: glowPulse 2s ease-in-out infinite;
-}
-
-.title {
-  font-size: clamp(2.6rem, 6vw, 4.2rem);
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--white);
-  line-height: 1.1;
-  margin-bottom: 1.4rem;
-  letter-spacing: -0.03em;
+  border-radius: 6px;
 }
 
-.highlight {
-  background: linear-gradient(135deg, var(--primary) 0%, #6C5CE7 50%, var(--accent-peach) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.logoText {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* ── Heading ── */
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  text-align: center;
 }
 
 .sub {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 1.08rem;
-  font-weight: 400;
-  line-height: 1.75;
-  margin-bottom: 3.5rem;
-  max-width: 540px;
-  margin-left: auto;
-  margin-right: auto;
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+  text-align: center;
 }
 
-/* ── Role cards ── */
-.roleCards {
+/* ── Login Cards ── */
+.cards {
   display: flex;
-  gap: 1.4rem;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-bottom: 3rem;
+  flex-direction: column;
+  width: 100%;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 .card {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border-radius: var(--radius-xl);
-  padding: 2.4rem 2.6rem;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
   cursor: pointer;
-  transition: all 0.35s ease;
-  width: 240px;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.cardGlow {
-  position: absolute;
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(circle, rgba(1, 131, 255, 0.2) 0%, transparent 70%);
-  top: -100px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.35s;
-}
-
-.card:hover .cardGlow {
-  opacity: 1;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .card:hover {
-  background: rgba(1, 131, 255, 0.08);
-  border-color: var(--primary-border);
-  transform: translateY(-6px);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 40px rgba(1, 131, 255, 0.1);
-}
-
-.cardAlt:hover {
-  background: rgba(255, 96, 88, 0.06);
-  border-color: rgba(255, 96, 88, 0.35);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 40px rgba(255, 96, 88, 0.1);
-}
-
-.cardAlt:hover .cardGlow {
-  background: radial-gradient(circle, rgba(255, 96, 88, 0.2) 0%, transparent 70%);
+  border-color: #1d4ed8;
+  background: #eff6ff;
 }
 
 .cardIcon {
-  width: 58px;
-  height: 58px;
-  background: var(--primary-soft);
-  border: 1px solid var(--primary-border);
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 1.2rem;
-  color: var(--primary);
-  transition: all 0.3s;
+  font-size: 22px;
+  flex-shrink: 0;
 }
 
-.card:hover .cardIcon {
-  background: rgba(1, 131, 255, 0.25);
-  transform: scale(1.05);
-}
-
-.cardAlt .cardIcon {
-  background: rgba(255, 96, 88, 0.12);
-  border-color: rgba(255, 96, 88, 0.3);
-  color: var(--accent-peach);
-}
-
-.cardAlt:hover .cardIcon {
-  background: rgba(255, 96, 88, 0.25);
-}
-
-.cardLabel {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--white);
-  margin-bottom: 6px;
-  letter-spacing: -0.01em;
+.cardTitle {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
 }
 
 .cardDesc {
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.4);
-  font-weight: 400;
-  line-height: 1.5;
-  margin-bottom: 1rem;
-}
-
-.cardArrow {
-  display: inline-block;
-  font-size: 1.1rem;
-  color: rgba(255, 255, 255, 0.3);
-  transition: all 0.3s;
-}
-
-.card:hover .cardArrow {
-  color: var(--primary);
-  transform: translateX(4px);
-}
-
-.cardAlt:hover .cardArrow {
-  color: var(--accent-peach);
-}
-
-/* ── Feature pills ── */
-.features {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-}
-
-.featurePill {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.5);
-  padding: 8px 16px;
-  border-radius: 100px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.featurePill:hover {
-  background: rgba(1, 131, 255, 0.08);
-  border-color: var(--primary-border);
-  color: var(--primary);
-}
-
-@media (max-width: 600px) {
-  .nav {
-    padding: 1rem;
-  }
-
-  .navBtn {
-    display: none;
-  }
-
-  .roleCards {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .card {
-    width: 100%;
-    max-width: 300px;
-  }
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
 }

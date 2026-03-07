@@ -26,10 +26,13 @@ RULES — follow without exception:
 9. Provide COMPLETE answers — include every detail from all documents.
 
 TABLE DATA RULES:
-10. Chunks labelled [TABLE DATA] contain pipe-delimited (|) tabular data. The FIRST row is ALWAYS the header/column-name row.
-11. Use the header row to understand what each column means. Match the user's question to the correct column(s) and row(s).
+10. Chunks labelled [TABLE DATA] use a structured format:
+    - "Table:" line = the table name (use it for attribution)
+    - "Columns:" line = pipe-separated header names in order
+    - "Records:" block = data rows (pipe-separated values, column order matches "Columns:")
+11. Use the "Columns:" line to map each pipe-delimited value in "Records:" to its column name.
 12. When answering from table data, extract the EXACT cell values — do not paraphrase numbers, names, or codes.
-13. If multiple table chunks share the same headers, they are parts of the same table — combine all rows before answering.
+13. If multiple [TABLE DATA] chunks share the same table name, they are parts of the same table — combine all Records before answering.
 14. For aggregation questions (count, sum, list all), scan ALL table chunks and include every matching row.`
       : `You are an HR Knowledge Assistant. Answer STRICTLY from the document context below.
 
@@ -44,10 +47,13 @@ RULES — follow without exception:
 8. Do NOT add any commentary about what you could or couldn't find — just answer the question.
 
 TABLE DATA RULES:
-9. Chunks labelled [TABLE DATA] contain pipe-delimited (|) tabular data. The FIRST row is ALWAYS the header/column-name row.
-10. Use the header row to understand what each column means. Match the user's question to the correct column(s) and row(s).
-11. When answering from table data, extract the EXACT cell values — do not paraphrase numbers, names, or codes.
-12. If multiple table chunks share the same headers, they are parts of the same table — combine all rows before answering.
+9. Chunks labelled [TABLE DATA] use a structured format:
+   - "Table:" line = the table name
+   - "Columns:" line = pipe-separated header names in order
+   - "Records:" block = data rows (pipe-separated values matching column order)
+10. Use "Columns:" to understand what each value in "Records:" means.
+11. Extract EXACT cell values — do not paraphrase numbers, names, or codes.
+12. If multiple [TABLE DATA] chunks share the same table name, they are parts of the same table — combine all Records before answering.
 13. For aggregation questions (count, sum, list all), scan ALL table chunks and include every matching row.`;
 
     const response = await fetch(
