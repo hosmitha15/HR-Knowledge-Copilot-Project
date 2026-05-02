@@ -1,8 +1,8 @@
-const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
-const GROQ_TEXT_MODEL = "llama-3.1-8b-instant";
-const GROQ_BASE = "https://api.groq.com/openai/v1/chat/completions";
+export const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"; //vision to see images
+export const GROQ_TEXT_MODEL = "llama-3.1-8b-instant"; //fast text model for table extraction from raw text    
+export const GROQ_BASE = "https://api.groq.com/openai/v1/chat/completions";
 
-function authHeaders() {
+export function authHeaders() {
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
@@ -12,8 +12,8 @@ function authHeaders() {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-function safeParseJSON(text) {
+// clean string — exported so other modules can reuse it
+export function safeParseJSON(text) {
   const clean = text
     .replace(/```json\s*/gi, "")
     .replace(/```\s*/gi, "")
@@ -25,8 +25,9 @@ function safeParseJSON(text) {
   }
 }
 
-// Rate-limit-aware Groq caller.
-async function callGroqWithRetry(body, maxRetries = 5) {
+// Groq's free tier has strict rate limits — retry with backoff
+// Exported so chatRoutes and chatServices can share this logic
+export async function callGroqWithRetry(body, maxRetries = 5) {
   let attempt = 0;
   while (attempt <= maxRetries) {
     const response = await fetch(GROQ_BASE, {
@@ -99,7 +100,7 @@ export const extractStructuredFromImage = async (imageBuffer, mimeType = "image/
 
     const data = await response.json();
     const raw = data.choices?.[0]?.message?.content || "";
-    console.log("🔍 Groq Vision raw response length:", raw.length, "chars");
+    console.log(" Groq Vision raw response length:", raw.length, "chars");
 
     const parsed = safeParseJSON(raw);
 
@@ -211,7 +212,7 @@ Rules:
 };
 
 
-export const extractFromImageWithGroq = async (imageBuffer) => {
+export const extractFactsFromImage = async (imageBuffer, mimeType = "image/png") => {
   try {
     const base64Image = imageBuffer.toString("base64");
     const response = await callGroqWithRetry({
@@ -222,23 +223,29 @@ export const extractFromImageWithGroq = async (imageBuffer) => {
           content: [
             {
               type: "text",
-              text: "Extract ALL visible text, numbers, tables and structured information from this image. Return clean plain text.",
+              text: "You are a semantic fact extractor for HR documents. Look at this image and extract every piece of factual information as individual, standalone sentences. Each sentence must be self-contained and include the subject (e.g. 'The annual leave entitlement is 20 days.'). Return ONLY a JSON array of strings: [\"fact 1\", \"fact 2\", ...]. If nothing relevant is found, return [].",
             },
             {
               type: "image_url",
-              image_url: { url: `data:image/png;base64,${base64Image}` },
+              image_url: { url: `data:${mimeType};base64,${base64Image}` },
             },
           ],
         },
       ],
-      temperature: 0.2,
+      temperature: 0.1,
+      max_tokens: 1024,
     });
 
-    if (!response) return "";
+    if (!response) return [];
     const data = await response.json();
-    return data.choices[0].message.content;
+    const raw = (data.choices?.[0]?.message?.content || "").trim();
+    const parsed = safeParseJSON(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((f) => typeof f === "string" && f.trim().length > 10);
+    }
+    return [];
   } catch (error) {
-    console.error(" Groq Vision Exception:", error.message);
-    return "";
+    console.error(" extractFactsFromImage Exception:", error.message);
+    return [];
   }
 };

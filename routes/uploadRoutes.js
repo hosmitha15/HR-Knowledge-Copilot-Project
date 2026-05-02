@@ -8,13 +8,9 @@ import path from "path";
 import DocumentChunk from "../models/DocumentChunk.js";
 import Document from "../models/Document.js";
 import { generateEmbedding } from "../services/embeddingService.js";
-import {
-  extractFromImageWithGroq,
-  extractStructuredFromImage,
-  extractTablesFromText,
-} from "../services/groqVisionService.js";
+import { extractStructuredFromImage, extractTablesFromText, extractFactsFromImage } from "../services/groqVisionService.js";
 import { extractPageImagesFromPDF } from "../services/pdfImageExtractor.js";
-import { clearCache } from "../services/lfuCache.js";
+import { clearCache, clearCacheForFile } from "../services/lfuCache.js";
 
 const router = express.Router();
 
@@ -62,24 +58,10 @@ async function storeChunksWithSections(blocks, filename) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Hybrid Structured Chunking for tables
-// Industry-level approach:
-//   • Headers stored ONCE per chunk (not repeated on every row)
-//   • Embedding text = compact: headers line + raw values only (no labels)
-//   • Chunk size = ROWS_PER_CHUNK data rows (default 5)
-//   • tableMetadata stored for LLM context reconstruction
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Infer a human-readable table name from the upload filename.
- * e.g. "1709123456789-leave_policy.csv" → "Leave Policy"
- */
 function inferTableName(filename, sheetName) {
   if (sheetName && sheetName.toLowerCase() !== "sheet1") {
     return sheetName.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
   }
-  // Strip timestamp prefix (digits + hyphen) and extension
   const base = filename
     .replace(/^\d+-/, "")
     .replace(/\.[^.]+$/, "")
@@ -89,30 +71,27 @@ function inferTableName(filename, sheetName) {
   return base || "Table";
 }
 
-/**
- * Build compact embedding text for a table chunk:
- *   Line 1: all header names joined by space
- *   Line 2+: raw cell values for each row (no repeated header labels)
- * This gives the embedding model maximum semantic signal with minimum noise.
- */
-function buildEmbeddingText(headers, dataRows) {
-  const headerLine = headers.join(" ");
-  const rowLines = dataRows.map((row) =>
-    row.split("|").map((c) => c.trim()).join(" ")
-  );
-  return [headerLine, ...rowLines].join("\n");
+
+function buildEmbeddingText(headers, dataRows, tableName) {
+  const facts = [];
+  facts.push(`Table "${tableName || "data"}" columns: ${headers.join(", ")}.`);
+  for (const row of dataRows) {
+    const cells = row.split("|").map((c) => c.trim());
+    const pairs = headers
+      .map((h, i) => {
+        const v = cells[i];
+        return v && v.length > 0 ? `${h}: ${v}` : null;
+      })
+      .filter(Boolean);
+
+    if (pairs.length > 0) {
+      facts.push(`In ${tableName || "this table"}, ${pairs.join(", ")}.`);
+    }
+  }
+
+  return facts.join("\n");
 }
 
-/**
- * Build the structured content string stored in MongoDB (and shown to LLM):
- *   Table: <name>
- *
- *   Columns:
- *   Col1 | Col2 | Col3
- *
- *   Records:
- *   Val1 | Val2 | Val3
- */
 function buildStructuredContent(tableName, headers, dataRows) {
   return [
     `Table: ${tableName}`,
@@ -125,23 +104,16 @@ function buildStructuredContent(tableName, headers, dataRows) {
   ].join("\n");
 }
 
-/**
- * Stores table blocks using hybrid structured chunking.
- * Replaces the old brute-force storeOtherChunks table branch.
- *
- * @param {string[]} blocks  - Array of pipe-delimited table strings (first row = header)
- * @param {string}   filename - Original upload filename
- * @param {string}   [sheetName] - Optional sheet name for XLSX (used in table name inference)
- */
+
 async function storeTableChunks(blocks, filename, sheetName = "") {
-  const ROWS_PER_CHUNK = 5; // sweet spot: 3–8 rows per chunk
+  const ROWS_PER_CHUNK = 5;
   const sectionName = "TABLE";
 
   for (const block of blocks) {
     if (!block || block.trim().length < 10) continue;
 
     const rows = block.split("\n").filter((r) => r.trim().length > 0);
-    if (rows.length < 2) continue; // need at least header + 1 data row
+    if (rows.length < 2) continue;
 
     const headerRow = rows[0];
     const headers = headerRow.split("|").map((c) => c.trim()).filter(Boolean);
@@ -154,17 +126,14 @@ async function storeTableChunks(blocks, filename, sheetName = "") {
     const totalRows = dataRows.length;
     let chunksCreated = 0;
 
-    // ── Structured chunks (3–8 rows each) ─────────────────────────────────
     for (let i = 0; i < dataRows.length; i += ROWS_PER_CHUNK) {
       const batchRows = dataRows.slice(i, i + ROWS_PER_CHUNK);
-      const chunkRowStart = i + 1;          // 1-based
+      const chunkRowStart = i + 1;
       const chunkRowEnd = i + batchRows.length;
 
-      // Human-readable structured content for storage + LLM context
       const content = buildStructuredContent(tableName, headers, batchRows);
 
-      // Compact embedding text: headers once + values only
-      const embeddingText = buildEmbeddingText(headers, batchRows);
+      const embeddingText = buildEmbeddingText(headers, batchRows, tableName);
 
       const embedding = await generateEmbedding(embeddingText);
       if (!embedding || embedding.length === 0) continue;
@@ -207,6 +176,38 @@ async function storeOtherChunks(blocks, filename, type) {
     }
   }
 }
+
+// ──────────────────────────────────────────────────────────────
+// Auto-category inference: runs on filename + first 600 chars
+// of extracted text. No API call needed — pure keyword matching.
+// ──────────────────────────────────────────────────────────────
+const CATEGORY_KEYWORDS = {
+  Benefits: ["benefit", "benefits", "insurance", "health", "dental", "vision",
+    "retirement", "401k", "provident", "pf", "compensation", "salary",
+    "pay", "allowance", "perks", "wellness", "medical", "reimbursement"],
+  Compliance: ["compliance", "legal", "gdpr", "hipaa", "regulatory", "audit",
+    "risk", "ethics", "anti-bribery", "data protection", "security",
+    "confidentiality", "privacy", "nda"],
+  Onboarding: ["onboarding", "onboard", "induction", "welcome", "new hire",
+    "new employee", "orientation", "joining", "probation"],
+  Training: ["training", "learning", "development", "course", "certification",
+    "skill", "workshop", "e-learning", "upskilling", "mentoring"],
+  Policies: ["policy", "policies", "handbook", "code of conduct", "rules",
+    "guidelines", "procedures", "leave", "attendance", "dress code",
+    "wfh", "work from home", "appraisal", "performance"],
+};
+
+function inferCategory(filename, textSample = "") {
+  const haystack = (filename + " " + textSample).toLowerCase();
+  const scores = {};
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    scores[cat] = keywords.filter(kw => haystack.includes(kw)).length;
+  }
+  const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
+  // If no keyword matched at all, fall back to Policies
+  return best[1] > 0 ? best[0] : "Policies";
+}
+
 
 function parseHtmlTables(html) {
   const stripTags = (s) =>
@@ -313,23 +314,22 @@ router.post("/upload", upload.single("file"), async (req, res) => {
           for (let imgIdx = 0; imgIdx < imageBuffers.length; imgIdx++) {
             const { buffer, pageNum } = imageBuffers[imgIdx];
             if (imgIdx > 0) await new Promise((r) => setTimeout(r, 1500));
-            const visionResult = await extractStructuredFromImage(buffer, "image/png");
+
+            // Semantic fact extraction + general vision in parallel
+            const [pageFacts, visionResult] = await Promise.all([
+              extractFactsFromImage(buffer, "image/png"),
+              extractStructuredFromImage(buffer, "image/png"),
+            ]);
+
+            // Facts are natural language sentences → stored as text chunks (embed perfectly)
+            if (pageFacts.length > 0) {
+              pageFacts.forEach(f => extractedTextBlocks.push(`[PDF page ${pageNum}]: ${f}`));
+              console.log(`📊 Page ${pageNum}: ${pageFacts.length} semantic facts extracted`);
+            }
 
             const rawTexts = (visionResult.textBlocks || []).filter(t => t?.trim().length > 5);
             if (rawTexts.length > 0) {
-              const combined = `[Image page ${pageNum}]: ${rawTexts.join(" | ")}`;
-              extractedTextBlocks.push(combined);
-              for (const t of rawTexts) {
-                if (t.trim().length > 80) {
-                  extractedTextBlocks.push(`[Image page ${pageNum}]: ${t}`);
-                }
-              }
-              console.log(` Page ${pageNum}: ${rawTexts.length} text blocks merged into 1 combined chunk`);
-            }
-
-            if ((visionResult.tables || []).length > 0) {
-              extractedTables.push(...visionResult.tables);
-              console.log(` Page ${pageNum}: ${visionResult.tables.length} tables from image`);
+              extractedTextBlocks.push(`[PDF page ${pageNum}]: ${rawTexts.join(" | ")}`);
             }
 
             const descriptions = (visionResult.imageDescriptions || []).map(
@@ -337,7 +337,6 @@ router.post("/upload", upload.single("file"), async (req, res) => {
             );
             if (descriptions.length > 0) {
               extractedImages.push(...descriptions);
-              console.log(`  🖼 Page ${pageNum}: ${descriptions.length} visual descriptions`);
             }
           }
         } catch (imgErr) {
@@ -352,22 +351,43 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       }
 
     } else if (mimetype.startsWith("image/")) {
-      console.log("🖼 Processing image with Groq Vision");
-      const groqResult = await extractStructuredFromImage(fileBuffer, mimetype);
-      extractedTextBlocks.push(...(groqResult.textBlocks || []));
-      extractedTables.push(...(groqResult.tables || []));
-      extractedImages.push(...(groqResult.imageDescriptions || []));
+      console.log("🖼 Processing image with Groq Vision (facts + structured extraction)...");
+
+      const [imageFacts, visionResult] = await Promise.all([
+        extractFactsFromImage(fileBuffer, mimetype),
+        extractStructuredFromImage(fileBuffer, mimetype),
+      ]);
+
+      if (imageFacts.length > 0) {
+        extractedTextBlocks.push(...imageFacts);
+        console.log(`  → ${imageFacts.length} semantic fact(s) stored as text chunks`);
+      }
+
+      const imageTables = (visionResult.tables || []).filter((t) => t?.trim().length > 10);
+      if (imageTables.length > 0) {
+        extractedTables.push(...imageTables);
+        console.log(`  → ${imageTables.length} structured table(s) from image queued for table chunks`);
+      }
+
+      extractedTextBlocks.push(...(visionResult.textBlocks || []));
+      extractedImages.push(...(visionResult.imageDescriptions || []));
 
     } else {
       return res.status(400).json({ message: "Unsupported file type" });
     }
 
     console.log(` Extraction complete → text:${extractedTextBlocks.length} tables:${extractedTables.length} images:${extractedImages.length}`);
+
+    // Use the category selected by HR in the dropdown; fall back to "Policies"
+    const category = req.body.category || "Policies";
+    console.log(`📂 Category: "${category}" for "${filename}"`);
+
     await storeChunksWithSections(extractedTextBlocks, filename);
-    await storeTableChunks(extractedTables, filename);   // ← structured chunking
+    await storeTableChunks(extractedTables, filename);
     await storeOtherChunks(extractedImages, filename, "image");
-    await Document.create({ filename, filepath: path.resolve(filepath), uploadedAt: new Date() });
-    clearCache();
+    await Document.create({ filename, filepath: path.resolve(filepath), category, uploadedAt: new Date() });
+    // Evict only cached Q&As that referenced this filename (smart invalidation)
+    await clearCacheForFile(filename);
     res.json({
       message: "File processed successfully",
       textBlocks: extractedTextBlocks.length,
@@ -413,11 +433,12 @@ router.delete("/documents/:id", async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: "Document not found" });
-    const fullPath = path.join(process.cwd(), doc.filepath);
+    // doc.filepath is stored as an absolute path (via path.resolve at upload time)
+    const fullPath = doc.filepath;
     if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
     await Document.deleteOne({ _id: req.params.id });
     await DocumentChunk.deleteMany({ filename: doc.filename });
-    clearCache();
+    await clearCacheForFile(doc.filename);
     res.json({ message: "Document deleted successfully" });
   } catch (error) { console.error(error); res.status(500).json({ error: "Delete failed" }); }
 });

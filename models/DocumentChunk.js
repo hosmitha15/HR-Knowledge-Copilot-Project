@@ -6,24 +6,22 @@ const documentChunkSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: ["text", "table", "image"],
-    default: "text"
+    default: "text",
   },
   content: String,
   embedding: [Number],
+  section: { type: String, default: "General" },
+  tableMetadata: {
+    tableName: String,
+    headers: [String],
+    totalRows: Number,
+    chunkRowStart: Number,
+    chunkRowEnd: Number,
+  },
   metadata: {
     page: Number,
-    position: Number
+    position: Number,
   },
-  section: String,
-  chunkIndex: Number,
-  // Structured metadata for table chunks (hybrid structured chunking)
-  tableMetadata: {
-    tableName: String,      // e.g. "Leave Policy"
-    headers: [String],      // ["Leave Type", "Days", "Eligibility"]
-    totalRows: Number,      // total data rows in the source table
-    chunkRowStart: Number,  // 1-based index of first row in this chunk
-    chunkRowEnd: Number     // 1-based index of last row in this chunk
-  }
 });
 
 const Document = mongoose.model("DocumentChunk", documentChunkSchema);

@@ -1,3 +1,4 @@
+//A reusable login/register form component used in both HRAuthPage.jsx and UserAuthPage.jsx. Has two tabs (Login / Register), form validation, loading state, error and success messages, and keyboard support (Enter key submits).
 import { useState } from 'react'
 import styles from './AuthForm.module.css'
 

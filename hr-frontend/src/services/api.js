@@ -39,14 +39,15 @@ export async function fetchDocuments() {
   if (!res.ok) {
     throw new Error(data.error || 'Failed to fetch documents')
   }
-  return data  
+  return data
 }
 
 
 
-export async function uploadDocument(file) {
+export async function uploadDocument(file, category = 'Policies') {
   const formData = new FormData()
   formData.append('file', file)
+  formData.append('category', category)
   const res = await fetch(`${BASE}/upload`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },

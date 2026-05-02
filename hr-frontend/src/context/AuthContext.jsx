@@ -1,4 +1,6 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+//stores Jwt token and user role in authentication state
+
+import { createContext, useContext, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const AuthContext = createContext(null)

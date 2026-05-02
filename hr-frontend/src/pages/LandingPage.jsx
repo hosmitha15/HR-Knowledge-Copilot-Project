@@ -1,3 +1,4 @@
+// Simply presents two clickable cards — HR Login and Employee Login — that navigate to their respective auth pages. Intentionally minimal with no extra features.
 import { useNavigate } from 'react-router-dom'
 import styles from './LandingPage.module.css'
 

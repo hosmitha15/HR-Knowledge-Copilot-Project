@@ -1,3 +1,4 @@
+// fast in-memory map and a MongoDB persistence
 
 import CacheEntry from "../models/CacheEntry.js";
 
@@ -13,7 +14,7 @@ export function normalizeQuestion(q) {
         .replace(/\s+/g, " ")
         .trim();
 }
-
+// loads top 100 asked qsns 
 export async function warmCache() {
     try {
         const top = await CacheEntry.find({})
@@ -41,7 +42,7 @@ export function cacheGet(question) {
     const key = normalizeQuestion(question);
     const entry = memCache.get(key);
     if (!entry) {
-        console.log(`💨 LFU Cache MISS  — key="${key.slice(0, 60)}…"`);
+        console.log(`LFU Cache MISS  — key="${key.slice(0, 60)}…"`);
         return null;
     }
     entry.frequency += 1;
@@ -76,7 +77,7 @@ export async function cachePut(question, answer, sources = [], multiDoc = false)
         frequency: 1,
         originalQuestion: question,
     });
-    console.log(`📥 LFU Cache STORE — key="${key.slice(0, 60)}…" (size=${memCache.size}/${MAX_CACHE_SIZE})`);
+    console.log(`LFU Cache STORE — key="${key.slice(0, 60)}…" (size=${memCache.size}/${MAX_CACHE_SIZE})`);
 
     try {
         await CacheEntry.findOneAndUpdate(
@@ -90,7 +91,7 @@ export async function cachePut(question, answer, sources = [], multiDoc = false)
         );
     } catch (err) {
         if (!err.message?.includes("duplicate")) {
-            console.error("⚠️  Cache persist error:", err.message);
+            console.error("Cache persist error:", err.message);
         }
     }
 }
@@ -107,7 +108,7 @@ function _evictLeastFrequent() {
     }
     if (lowestKey) {
         memCache.delete(lowestKey);
-        console.log(`♻️  LFU Cache EVICT — key="${lowestKey.slice(0, 60)}…" (freq=${lowestFreq})`);
+        console.log(`LFU Cache EVICT — key="${lowestKey.slice(0, 60)}…" (freq=${lowestFreq})`);
     }
 }
 
@@ -131,4 +132,21 @@ export async function clearCache() {
     memCache.clear();
     await CacheEntry.deleteMany({}).catch(() => { });
     if (size > 0) console.log(`🗑️  LFU Cache CLEARED — removed ${size} in-memory + all MongoDB entries`);
+}
+
+export async function clearCacheForFile(filename) {
+    if (!filename) return;
+    let removed = 0;
+    for (const [key, val] of memCache.entries()) {
+        if (Array.isArray(val.sources) && val.sources.includes(filename)) {
+            memCache.delete(key);
+            removed++;
+        }
+    }
+    await CacheEntry.deleteMany({ sources: filename }).catch(() => { });
+    if (removed > 0) {
+        console.log(`  Cache: evicted ${removed} entries related to "${filename}"`);
+    } else {
+        console.log(` Cache: no entries found for "${filename}" — nothing evicted`);
+    }
 }

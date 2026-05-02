@@ -15,13 +15,19 @@ export default function ChatMessage({ role, text, sources }) {
           {text}
         </div>
 
-        {isBot && sources && sources.length > 0 && (
-          <div className={styles.sources}>
-            {[...new Set(sources)].map((s, i) => (
-              <span key={i} className={styles.sourceTag}>📄 {s}</span>
-            ))}
-          </div>
-        )}
+        {isBot && sources && sources.length > 0 && (() => {
+          // Strip any undefined / empty / literal "undefined" / "undefined.ext" entries
+          const cleanSources = [...new Set(
+            sources.filter(s => s && s.trim().length > 0 && !s.trim().toLowerCase().startsWith('undefined'))
+          )];
+          return cleanSources.length > 0 ? (
+            <div className={styles.sources}>
+              {cleanSources.map((s, i) => (
+                <span key={i} className={styles.sourceTag}>📄 {s}</span>
+              ))}
+            </div>
+          ) : null;
+        })()}
       </div>
     </div>
   )

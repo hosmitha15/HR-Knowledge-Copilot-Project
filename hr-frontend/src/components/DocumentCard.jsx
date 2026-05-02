@@ -1,3 +1,5 @@
+// A clickable card showing one uploaded document. Clicking opens the document in a new tab. Has a delete button that asks for confirmation first. Used in the HR Dashboard document list.
+
 import { IconFile, IconTrash } from './Icons.jsx'
 import { deleteDocument } from '../services/api.js'
 import styles from './DocumentCard.module.css'
@@ -16,7 +18,7 @@ function formatDate(d) {
 
 export default function DocumentCard({ doc, onDelete }) {
   const openDocument = () => {
-    window.open("http://localhost:5000/api/documents/view/" + doc._id)
+    window.open("/api/documents/view/" + doc._id)
   }
 
   const handleDelete = async (e) => {

@@ -124,3 +124,52 @@
 .emptyState p {
   font-size: 0.88rem;
 }
+
+/* ── Category filter buttons ── */
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.filterBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 100px;
+  background: var(--white);
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.filterBtn:hover {
+  border-color: var(--primary);
+  color: var(--navy);
+}
+
+.filterBtnActive {
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.filterCount {
+  background: rgba(255, 255, 255, 0.3);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 100px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.filterBtnActive .filterCount {
+  background: rgba(255, 255, 255, 0.25);
+}

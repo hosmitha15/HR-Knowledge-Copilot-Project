@@ -6,22 +6,11 @@ import { cosineSimilarity } from "../utils/cosineSimilarity.js";
 import {
   cacheGet, cachePut, getCacheStats, clearCache,
 } from "../services/lfuCache.js";
+import {
+  callGroqWithRetry, safeParseJSON, GROQ_TEXT_MODEL,
+} from "../services/groqVisionService.js";
 
 const router = express.Router();
-
-/**
- * Render a single retrieved chunk as a context string for the LLM.
- * Table chunks with tableMetadata get the structured format:
- *
- *   [TABLE DATA] Table: Leave Policy | Rows 1–5 of 20
- *   Columns:
- *   Leave Type | Days | Eligibility
- *
- *   Records:
- *   Casual | 12 | All Employees
- *
- * Plain text/image chunks fall back to existing label + content.
- */
 function renderChunkForContext(r) {
   const typeLabel =
     r.type === "table" ? "TABLE DATA" :
@@ -32,7 +21,6 @@ function renderChunkForContext(r) {
     const rowRange = (chunkRowStart && chunkRowEnd)
       ? ` | Rows ${chunkRowStart}–${chunkRowEnd} of ${totalRows || "?"}`
       : "";
-    // Use stored structured content if it already has the format, else rebuild
     const hasStructured = r.content && r.content.startsWith("Table:");
     const body = hasStructured
       ? r.content
@@ -43,7 +31,6 @@ function renderChunkForContext(r) {
         headers.join(" | "),
         "",
         "Records:",
-        // strip a header row from content if it was stored pipe-style
         ...(r.content || "").split("\n").filter(l => l.trim().length > 0),
       ].join("\n");
     return `[${typeLabel}]${rowRange}\n${body}`;
@@ -61,7 +48,7 @@ function contentOverlap(a, b) {
   return smaller === 0 ? 0 : common / smaller;
 }
 
-function deduplicateByContent(chunks, threshold = 0.80) {
+function deduplicateByContent(chunks, threshold = 0.60) {
   const unique = [];
   for (const chunk of chunks) {
     if (chunk.type === "table") {
@@ -70,7 +57,7 @@ function deduplicateByContent(chunks, threshold = 0.80) {
     }
     const isDup = unique.some(
       (u) =>
-        u.filename === chunk.filename &&
+        // Cross-document dedup enabled (removed filename === check)
         u.type !== "table" &&
         contentOverlap(u.content, chunk.content) >= threshold
     );
@@ -86,7 +73,7 @@ const STOP_WORDS = new Set([
   "give", "list", "explain", "describe", "find", "show", "please", "and", "or",
   "but", "not", "all", "every", "each", "its", "it", "this", "that", "with",
   "from", "by", "has", "have", "had",
-]);
+]); //can be used for keyword boosting and keyword fall back search 
 
 function extractKeywords(text) {
   return text
@@ -94,6 +81,40 @@ function extractKeywords(text) {
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
     .filter((w) => w.length > 1 && !STOP_WORDS.has(w));
+}
+
+//paraphrasing
+async function expandQuery(question) {
+  try {
+    const response = await callGroqWithRetry({
+      model: GROQ_TEXT_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            `You generate search query alternatives for a document retrieval system. ` +
+            `Given a question, return ONLY a JSON array of 2 alternative phrasings that:\n` +
+            `- Rephrase the question with different word order or structure\n` +
+            `- Use synonyms for key terms (e.g. "allowance" → "entitlement", "limit", "amount")\n` +
+            `- Convert question form to keyword form (e.g. "what is the X?" → "X policy details")\n` +
+            `- Keep the same meaning and intent\n` +
+            `Return ONLY a JSON array: ["phrase1", "phrase2"]. No explanation, no markdown.`,
+        },
+        { role: "user", content: `Question: "${question}"` },
+      ],
+      temperature: 0.4,
+      max_tokens: 150,
+    });
+    if (!response) return [question];
+    const data = await response.json();
+    const raw = (data.choices?.[0]?.message?.content || "[]").trim();
+    const parsed = safeParseJSON(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return [question, ...parsed.slice(0, 2)];
+    }
+  } catch (_) {
+  }
+  return [question];
 }
 
 
@@ -111,20 +132,21 @@ router.post("/chat", async (req, res) => {
         fromCache: true,
       });
     }
-
-    const queryEmbedding = await generateEmbedding(question);
-
-    const allDocs = await Document.find(
-      {},
-      { content: 1, filename: 1, section: 1, embedding: 1, type: 1, tableMetadata: 1 }
-    );
+    const [queryVariants, allDocs] = await Promise.all([
+      expandQuery(question),
+      Document.find({}, { content: 1, filename: 1, section: 1, embedding: 1, type: 1, tableMetadata: 1 }),
+    ]);
 
     if (!allDocs.length) return res.json({ answer: "No documents uploaded yet." });
 
     const keywords = extractKeywords(question);
+    console.log(`🔍 Query expansion: ${queryVariants.length} variant(s) — "${queryVariants.join('" | "')}"`);
+    const allQueryEmbeddings = await Promise.all(queryVariants.map((q) => generateEmbedding(q)));
+
 
     const scored = allDocs.map((doc) => {
-      const baseSimilarity = cosineSimilarity(queryEmbedding, doc.embedding);
+      const similarities = allQueryEmbeddings.map((emb) => cosineSimilarity(emb, doc.embedding));
+      const baseSimilarity = Math.max(...similarities);
       const docType = doc.type || "text";
 
       const sectionLower = (doc.section || "").toLowerCase();
@@ -132,7 +154,6 @@ router.post("/chat", async (req, res) => {
 
       const contentLower = (doc.content || "").toLowerCase();
       const keywordHits = keywords.filter((kw) => contentLower.includes(kw)).length;
-      // Also boost if keyword appears in tableMetadata headers
       const headerHits = docType === "table" && doc.tableMetadata?.headers
         ? keywords.filter((kw) => doc.tableMetadata.headers.some((h) => h.toLowerCase().includes(kw))).length
         : 0;
@@ -168,7 +189,8 @@ router.post("/chat", async (req, res) => {
       return res.json({ answer: "No relevant information found in uploaded documents." });
     }
 
-    topResults = deduplicateByContent(topResults, 0.70).slice(0, 15);
+    topResults = deduplicateByContent(topResults, 0.60).slice(0, 15);
+    topResults = topResults.filter(r => r.filename && r.filename !== "undefined");
 
     const byFile = {};
     for (const r of topResults) {
@@ -177,7 +199,7 @@ router.post("/chat", async (req, res) => {
     }
 
     const overallTopScore = topResults[0]?.score || 0;
-    const minFileScore = overallTopScore * 0.60;
+    const minFileScore = overallTopScore * 0.85;
     const relevantFiles = {};
     for (const [fname, chunks] of Object.entries(byFile)) {
       const bestScore = Math.max(...chunks.map(c => c.score));
@@ -185,7 +207,7 @@ router.post("/chat", async (req, res) => {
         relevantFiles[fname] = chunks;
       }
     }
-    const fileNames = Object.keys(relevantFiles);
+    const fileNames = Object.keys(relevantFiles).filter(f => f && f !== "undefined");
     const multiDoc = fileNames.length > 1;
     topResults = topResults.filter(r => relevantFiles[r.filename]);
 

@@ -1,3 +1,4 @@
+//connecting express backend to Mongodb atlas 
 import mongoose from "mongoose";
 
 export const connectDB = async () => {

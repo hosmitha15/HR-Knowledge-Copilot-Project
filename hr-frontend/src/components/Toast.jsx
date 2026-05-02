@@ -1,3 +1,4 @@
+// self dismissing pop-up notification
 import { useEffect } from 'react'
 import styles from './Toast.module.css'
 
